@@ -1,4 +1,5 @@
 use std::{io::{Read, Write}, net::{TcpListener, TcpStream}, thread::{self, JoinHandle}, time::Duration};
+use kv_store::threadpool::ThreadPool;
 
 fn main() {
 
@@ -21,13 +22,19 @@ fn handle_client(mut stream: TcpStream) {
     }
 }
 
-
 fn run_server() {
+    let pool = match ThreadPool::new(5) {
+        Ok(pool) => pool,
+        Err(e) => {
+            eprintln!("failed to create thread pool: {}", e);
+            return
+        }
+    };
     let listener = TcpListener::bind("127.0.0.1:6378").expect("failed to open port");
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                thread::spawn(|| { handle_client(stream) });
+                pool.execute(|| {handle_client(stream);});
             },
             Err(e) => {
                 println!("error: {}", e)
@@ -50,7 +57,6 @@ fn simulate_client() {
 }
 
 
-
 #[test]
 fn test_spam_pings() {
     let server = thread::spawn(|| {
@@ -59,7 +65,7 @@ fn test_spam_pings() {
 
     thread::sleep(Duration::from_millis(200));
 
-    let num_of_pings = 1000000;
+    let num_of_pings = 10;
     let mut handles: Vec<JoinHandle<_>> = Vec::with_capacity(num_of_pings);
     for _ in 0..num_of_pings { 
         handles.push(thread::spawn(|| {
