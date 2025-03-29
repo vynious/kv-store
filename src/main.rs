@@ -2,7 +2,12 @@ use std::{io::{Read, Write}, net::{TcpListener, TcpStream}, thread::{self, JoinH
 use kv_store::threadpool::ThreadPool;
 
 fn main() {
-
+    let server = thread::spawn(|| {
+        run_server();
+    });
+    loop {
+        
+    }
 }
 
 // reads into buffer
@@ -10,6 +15,7 @@ fn handle_client(mut stream: TcpStream) {
     let mut buffer = [0;128];
     match stream.read(&mut buffer) {
         Ok(n) => {
+
             let response = String::from_utf8_lossy(&buffer[..n]);
             println!("received: {}", response);
             if let Err(e) = stream.write_all(b"+PONG\r\n") {
@@ -34,7 +40,9 @@ fn run_server() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                pool.execute(|| {handle_client(stream);});
+                pool.execute(|| {
+                    handle_client(stream);
+                });
             },
             Err(e) => {
                 println!("error: {}", e)
@@ -43,10 +51,10 @@ fn run_server() {
     }
 }
 
-fn simulate_client() {
+fn mock_client() {
     let mut stream = TcpStream::connect("127.0.0.1:6378").expect("failed to connect to server");
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(Duration::from_secs(1)))
         .expect("failed to set read timeout");
     stream.write_all(b"+PING\r\n")
         .expect("failed to send ping");
@@ -69,7 +77,7 @@ fn test_spam_pings() {
     let mut handles: Vec<JoinHandle<_>> = Vec::with_capacity(num_of_pings);
     for _ in 0..num_of_pings { 
         handles.push(thread::spawn(|| {
-            simulate_client();
+            mock_client();
         }));
     }
     for handle in handles {

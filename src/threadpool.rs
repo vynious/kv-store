@@ -1,8 +1,8 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 
 
-use std::{fmt::{self, write}, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}};
-
-
+use std::{fmt::{self}, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}};
 
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ impl fmt::Display for PoolCreationError {
 impl std::error::Error for PoolCreationError {}
 
 
-trait FnBox {
+pub trait FnBox {
     fn call_box(self: Box<Self>);
 }
 
@@ -36,6 +36,7 @@ impl<F: FnOnce()> FnBox for F {
 }
 
 type Job = Box<dyn FnBox + Send + 'static>;
+
 
 pub struct Worker {
     id: usize,
