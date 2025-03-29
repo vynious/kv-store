@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 
+#[derive(Default)]
 pub struct KvStore {
     data: HashMap<String, String>
 }

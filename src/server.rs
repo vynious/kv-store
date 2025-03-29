@@ -1,46 +1,61 @@
-use std::{io::{Read, Write}, net::{TcpListener, TcpStream}, thread::{self, JoinHandle}, time::Duration};
-use crate::threadpool::{ThreadPool, PoolCreationError};
+use std::{io::{Read, Write}, net::{TcpListener, TcpStream}, sync::{Arc, Mutex}, thread::{self, JoinHandle}, time::Duration};
+use crate::{storage::{KvStore, SharedKvShare}, threadpool::{PoolCreationError, ThreadPool}};
 
-// reads into buffer
-fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0;128];
-    match stream.read(&mut buffer) {
-        Ok(n) => {
 
-            let response = String::from_utf8_lossy(&buffer[..n]);
-            println!("received: {}", response);
-            if let Err(e) = stream.write_all(b"+PONG\r\n") {
-                    eprintln!("failed to write to stream: {}" , e)
-                }
-        }
-        Err(e) => {
-            eprint!("error reading from stream into buffer: {}", e)
-        }
-    }
+pub struct Server {
+    tcp_listener: TcpListener,
+    store: SharedKvShare,
+    pool: ThreadPool,
+     
 }
 
-pub fn run_server() {
-    let pool = match ThreadPool::new(5) {
-        Ok(pool) => pool,
-        Err(e) => {
-            eprintln!("failed to create thread pool: {}", e);
-            return
+impl Server {
+    pub fn new(thread_count: usize) -> Self {
+        Server { 
+            tcp_listener: TcpListener::bind("127.0.0.1:6378").expect("failed to open port"),
+            store: Arc::new(Mutex::new(KvStore::new())), 
+            pool: ThreadPool::new(thread_count).unwrap() 
         }
-    };
-    let listener = TcpListener::bind("127.0.0.1:6378").expect("failed to open port");
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                pool.execute(|| {
-                    handle_client(stream);
-                });
-            },
-            Err(e) => {
-                println!("error: {}", e)
+    }
+
+    pub fn run_server(self: Arc<Server>) {
+        for stream in self.tcp_listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    let server = Arc::clone(&self);
+                    self.pool.execute(move || { 
+                        server.handle_client(stream);
+                    });
+                },
+                Err(e) => {
+                    eprintln!("error: {}", e)
+                }
             }
         }
     }
+
+    fn handle_client(&self, mut stream: TcpStream) {
+        let mut buffer = [0;128];
+        match stream.read(&mut buffer) {
+            Ok(n) => {
+
+                let response = String::from_utf8_lossy(&buffer[..n]);
+                println!("received: {}", response);
+                if let Err(e) = stream.write_all(b"+PONG\r\n") {
+                        eprintln!("failed to write to stream: {}" , e)
+                    }
+            }
+            Err(e) => {
+                eprint!("error reading from stream into buffer: {}", e)
+            }
+        }
+    }
+
 }
+
+
+
+
 
 fn mock_client() {
     let mut stream = TcpStream::connect("127.0.0.1:6378").expect("failed to connect to server");
@@ -59,7 +74,8 @@ fn mock_client() {
 #[test]
 fn test_spam_pings() {
     let server = thread::spawn(|| {
-        run_server();
+        let server = Arc::new(Server::new(5));
+        server.run_server();
     });
 
     thread::sleep(Duration::from_millis(200));
