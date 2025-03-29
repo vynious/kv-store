@@ -1,12 +1,11 @@
-use std::{io::{Read, Write}, net::{TcpListener, TcpStream}, sync::{Arc, Mutex}, thread::{self, JoinHandle}, time::Duration};
-use crate::{storage::{KvStore, SharedKvShare}, threadpool::{PoolCreationError, ThreadPool}};
+use std::{collections::btree_map::Keys, io::{Read, Write}, net::{TcpListener, TcpStream}, sync::{Arc, Mutex}, thread::{self, JoinHandle}, time::Duration};
+use crate::{storage::{KvStore, SharedKvStore}, threadpool::{PoolCreationError, ThreadPool}};
 
 
 pub struct Server {
     tcp_listener: TcpListener,
-    store: SharedKvShare,
-    pool: ThreadPool,
-     
+    store: SharedKvStore,
+    pool: ThreadPool,    
 }
 
 impl Server {
@@ -41,9 +40,12 @@ impl Server {
 
                 let response = String::from_utf8_lossy(&buffer[..n]);
                 println!("received: {}", response);
+                
+
+                
                 if let Err(e) = stream.write_all(b"+PONG\r\n") {
                         eprintln!("failed to write to stream: {}" , e)
-                    }
+                }
             }
             Err(e) => {
                 eprint!("error reading from stream into buffer: {}", e)
@@ -51,6 +53,31 @@ impl Server {
         }
     }
 
+    fn process_command(self, command: &str, key: &str, value: &str) -> String {
+        match command {
+            "GET" => {
+                let result: String = match self.store.lock().unwrap().get(key) { 
+                    Some(val) => val,
+                    None => "".to_string(),
+                };
+                result
+            },
+            "SET" => {
+                self.store.lock().unwrap().set(key.to_string(), value.to_string());
+                "".to_string()
+            },
+            "DELETE" => {
+                let result: String = match self.store.lock().unwrap().remove(key) { 
+                    Some(val) => val,
+                    None => "".to_string(),
+                };
+                result
+            },
+            _ => {
+                "INVALID COMMAND".to_string()
+            }
+        }
+    }
 }
 
 

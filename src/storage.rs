@@ -25,6 +25,4 @@ impl KvStore {
 }
 
 
-pub type SharedKvShare = Arc<Mutex<KvStore>>;
-
-
+pub type SharedKvStore = Arc<Mutex<KvStore>>;
