@@ -1,48 +1,65 @@
+# Embedded KV Store in Rust
 
-# Rust Key-Value Store (KV Store)
-
-A simple, in-memory key-value store in Rust:
-
-- **Server** listens on `127.0.0.1:6378`
-- **Client** sends serialized commands (`GET`, `SET`, `DELETE`) via `bincode`
-- **Thread Pool** handles concurrency
-- Basic **HashMap**-based storage
+A lightweight key-value (KV) store using TCP networking, thread pools, and Rust's concurrency primitives.
 
 
-## Quick Start
+## Features
 
+- **Client-server architecture** over TCP.
+- **Thread pool** for efficient concurrent request handling.
+- **Binary serialization** (`bincode`) for fast command transmission.
+- **Clap-based CLI** for user-friendly interaction.
 
-**2. Run Server:**
-```bash
+## Commands
+
+- `SET key value` — Sets a value for a key.
+- `GET key` — Retrieves a value by key.
+- `DELETE key` — Deletes a key-value pair.
+
+## Architecture
+
+### Client-Server Interaction
+
+```
+Client                   Server
+   | Connect TCP (6378)    |
+   |---------------------->| 
+   | Serialized Command    |
+   |---------------------->| Deserialize
+   |                       | Process command
+   |        Response       |
+   |<----------------------|
+```
+
+### Thread Pool Mechanism
+
+```
+TCP Listener
+      |
+      v
+  ThreadPool
+      |
+      +-------------------+---------------+
+      |                   |               |
+ Worker1              Worker2          WorkerN
+      |                   |               |
+      +-------------------+---------------+
+                  |
+                  v
+              KV Store
+```
+## Usage
+
+### Starting the Server
+
+```shell
 cargo run --bin server
 ```
 
-**3. Run Client:**
-```bash
-# Set
-cargo run --bin client -- set mykey myvalue
-# Get
-cargo run --bin client -- get mykey
-# Delete
-cargo run --bin client -- delete mykey
+### Running Client Commands
+
+```shell
+cargo run --bin client -- set key value
+cargo run --bin client -- get key
+cargo run --bin client -- delete key
 ```
-
-
-## Overview
-
-- **Commands**  
-  ```rust
-  #[derive(Subcommand, Serialize, Deserialize)]
-  pub enum Commands {
-      Get { key: String },
-      Set { key: String, value: String },
-      Delete { key: String },
-  }
-  ```
-  The client serializes these commands and sends them to the server. The server deserializes and executes them on the `KvStore`.
-
-- **KvStore**  
-  A `HashMap<String, String>` with `get`, `set`, and `remove` operations. Access is synchronized via `Arc<Mutex<KvStore>>`.
-
-- **ThreadPool**  
-  A custom thread pool that uses a worker model to handle incoming client connections in parallel.

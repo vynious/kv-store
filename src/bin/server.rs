@@ -51,7 +51,6 @@ impl Server {
         }
     }
 
-    // todo: got issues
     fn handle_incoming_cmd(&self, mut stream: TcpStream) {
         if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(5))) {
                 eprintln!("failed to set timeout: {}", e);
