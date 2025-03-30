@@ -25,7 +25,7 @@ pub struct Server {
     store: SharedKvStore,
     pool: ThreadPool,
 }
- 
+
 impl Server {
     pub fn new(thread_count: usize) -> Self {
         Server {
@@ -53,34 +53,66 @@ impl Server {
 
     // todo: got issues
     fn handle_incoming_cmd(&self, mut stream: TcpStream) {
-        let mut buffer = Vec::new();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .expect("failed to set read timeout");
-        stream
-            .read_to_end(&mut buffer)
-            .expect("failed to read into buffer");
-        let cmd: Commands = bincode::deserialize(&buffer).expect("failed to deserialize");
+        if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(5))) {
+                eprintln!("failed to set timeout: {}", e);
+                return;
+        }
+        let mut buffer = [0; 1024]; 
+        if let Err(e) = stream.read(&mut buffer) { 
+            eprintln!("failed to read into buffer: {}",e);
+            return;
+        }
+        let cmd = match bincode::deserialize(&buffer) {
+            Ok(cmd) => {
+                cmd
+            },
+            Err(e) => {
+                eprintln!("failed to deserialize command: {}", e);
+                return;
+            }
+        };
+
         let mut response = String::new();
+    
         match cmd {
             Commands::Set { key, value } => {
+                println!("setting key={}, value={}", key, value);
                 self.store.lock().unwrap().set(key, value);
+                response.push_str("OK");
             }
-            Commands::Delete { key } => match self.store.lock().unwrap().remove(&key) {
-                Some(resp) => {
-                    response.push_str(&resp);
+            Commands::Delete { key } => {
+                println!("deleting key={}", key);
+                match self.store.lock().unwrap().remove(&key) {
+                    Some(resp) => {
+                        response.push_str(&resp);
+                    }
+                    None => {
+                        response.push_str("key not found");
+                    }
                 }
-                None => {}
-            },
-            Commands::Get { key } => match self.store.lock().unwrap().get(&key) {
-                Some(resp) => {
-                    response.push_str(&resp);
+            }
+            Commands::Get { key } => {
+                println!("getting key={}", key);
+                match self.store.lock().unwrap().get(&key) {
+                    Some(resp) => {
+                        response.push_str(&resp);
+                    }
+                    None => {
+                        response.push_str("key not found");
+                    }
                 }
-                None => {}
-            },
+            }
         }
+        response.push_str("\r\n");
+        println!("response: {}", response);
         if let Err(e) = stream.write_all(response.as_bytes()) {
             eprintln!("failed to write to stream: {}", e);
+            return;
+        }
+        
+        if let Err(e) = stream.flush() {
+            eprintln!("failed to flush stream: {}", e);
+            return;
         }
     }
 }
